@@ -1,0 +1,166 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile, lesson duration, and driving lesson settings stored upon authentication",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique user identifier matching Firebase Auth UID",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address",
+          "maxLength": 256
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name",
+          "maxLength": 128
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Profile picture URL from Google Auth",
+          "maxLength": 512
+        },
+        "lessonPrice": {
+          "type": "number",
+          "description": "Cost per driving lesson in NIS"
+        },
+        "lessonDurationMinutes": {
+          "type": "number",
+          "description": "Standard duration of a driving lesson in minutes (e.g. 40)"
+        },
+        "targetLessons": {
+          "type": "number",
+          "description": "Target minimum driving lessons"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Server timestamp of creation",
+          "maxLength": 64
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "description": "Server timestamp of last login",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "email", "displayName", "createdAt", "lastLoginAt"]
+    },
+    "DrivingLesson": {
+      "title": "DrivingLesson",
+      "description": "A scheduled or completed driving lesson record with start time",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique lesson ID",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID",
+          "maxLength": 128
+        },
+        "date": {
+          "type": "string",
+          "description": "Date of lesson in YYYY-MM-DD format",
+          "maxLength": 32
+        },
+        "startTime": {
+          "type": "string",
+          "description": "Start time of lesson in HH:mm format",
+          "maxLength": 16
+        },
+        "lessonCount": {
+          "type": "number",
+          "description": "Number of lessons (1 or 2)"
+        },
+        "isCompleted": {
+          "type": "boolean",
+          "description": "Whether the lesson was marked as completed with checkmark (calculates debt only when true)"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional notes",
+          "maxLength": 1000
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Update timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "userId", "date", "lessonCount", "isCompleted", "createdAt", "updatedAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment made for driving lessons",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique payment ID",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID",
+          "maxLength": 128
+        },
+        "date": {
+          "type": "string",
+          "description": "Date of payment in YYYY-MM-DD format",
+          "maxLength": 32
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount paid in NIS"
+        },
+        "method": {
+          "type": "string",
+          "description": "Payment method",
+          "enum": ["cash", "bit", "paybox", "bank_transfer", "credit", "other"]
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional payment notes",
+          "maxLength": 1000
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Update timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "userId", "date", "amount", "method", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Stores user profile, lesson price, and duration settings"
+    },
+    "/users/{userId}/lessons/{lessonId}": {
+      "schema": "DrivingLesson",
+      "description": "Stores user driving lessons with start time and completion checkbox status"
+    },
+    "/users/{userId}/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Stores user payments paid towards driving lessons"
+    }
+  }
+}

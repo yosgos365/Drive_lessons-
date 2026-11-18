@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny all unspecified paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global reusable helpers
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Connection probe document
+    match /test/{docId} {
+      allow get, read: if true;
+    }
+
+    // User Profile & Settings Validation Helper
+    function isValidUserProfile(data, expectedUid) {
+      return data.id is string && data.id == expectedUid &&
+        data.email is string && data.email.size() <= 256 &&
+        data.displayName is string && data.displayName.size() <= 128 &&
+        (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 2048)) &&
+        (!('lessonPrice' in data) || (data.lessonPrice is number && data.lessonPrice >= 0 && data.lessonPrice <= 5000)) &&
+        (!('lessonDurationMinutes' in data) || (data.lessonDurationMinutes is number && data.lessonDurationMinutes >= 10 && data.lessonDurationMinutes <= 180)) &&
+        (!('teacherName' in data) || (data.teacherName is string && data.teacherName.size() <= 100)) &&
+        (!('targetLessons' in data) || (data.targetLessons is number && data.targetLessons >= 1 && data.targetLessons <= 200)) &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        data.lastLoginAt is string && data.lastLoginAt.size() <= 64 &&
+        (!('role' in data) || (data.role in ['user', 'admin'])) &&
+        data.keys().hasAll(['id', 'email', 'displayName', 'createdAt', 'lastLoginAt']) &&
+        data.keys().hasOnly(['id', 'email', 'displayName', 'photoURL', 'lessonPrice', 'lessonDurationMinutes', 'teacherName', 'targetLessons', 'createdAt', 'lastLoginAt', 'role']);
+    }
+
+    // Driving Lesson Validation Helper
+    function isValidDrivingLesson(data, expectedUid) {
+      return data.id is string && isValidId(data.id) &&
+        data.userId is string && data.userId == expectedUid &&
+        data.date is string && data.date.size() <= 32 &&
+        (!('startTime' in data) || (data.startTime is string && data.startTime.size() <= 16)) &&
+        data.lessonCount is number && data.lessonCount > 0 && data.lessonCount <= 20 &&
+        data.isCompleted is bool &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        data.updatedAt is string && data.updatedAt.size() <= 64 &&
+        data.keys().hasAll(['id', 'userId', 'date', 'lessonCount', 'isCompleted', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'userId', 'date', 'startTime', 'lessonCount', 'isCompleted', 'notes', 'createdAt', 'updatedAt']);
+    }
+
+    // Payment Validation Helper
+    function isValidPayment(data, expectedUid) {
+      return data.id is string && isValidId(data.id) &&
+        data.userId is string && data.userId == expectedUid &&
+        data.date is string && data.date.size() <= 32 &&
+        data.amount is number && data.amount > 0 && data.amount <= 100000 &&
+        data.method is string && data.method in ['cash', 'bit', 'paybox', 'bank_transfer', 'credit', 'other'] &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        data.updatedAt is string && data.updatedAt.size() <= 64 &&
+        data.keys().hasAll(['id', 'userId', 'date', 'amount', 'method', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'userId', 'date', 'amount', 'method', 'notes', 'createdAt', 'updatedAt']);
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get, list: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUserProfile(incoming(), userId);
+      allow update: if isOwner(userId) && isValidUserProfile(incoming(), userId) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'lastLoginAt', 'role', 'lessonPrice', 'lessonDurationMinutes', 'teacherName', 'targetLessons']);
+      allow delete: if isOwner(userId);
+
+      // Subcollection: Driving Lessons
+      match /lessons/{lessonId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(lessonId) &&
+          incoming().id == lessonId &&
+          incoming().userId == userId &&
+          isValidDrivingLesson(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(lessonId) &&
+          isValidDrivingLesson(incoming(), userId) &&
+          incoming().id == existing().id &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['date', 'startTime', 'lessonCount', 'isCompleted', 'notes', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(lessonId);
+      }
+
+      // Subcollection: Payments
+      match /payments/{paymentId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(paymentId) &&
+          incoming().id == paymentId &&
+          incoming().userId == userId &&
+          isValidPayment(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(paymentId) &&
+          isValidPayment(incoming(), userId) &&
+          incoming().id == existing().id &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['date', 'amount', 'method', 'notes', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(paymentId);
+      }
+    }
+  }
+}
